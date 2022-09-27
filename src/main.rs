@@ -11,7 +11,7 @@ mod user;
 mod utils;
 
 // Import Crates
-use clap::{Command, Arg};
+use clap::{Arg, Command};
 
 use futures_lite::FutureExt;
 use hyper::{header::HeaderValue, Body, Request, Response};
@@ -19,7 +19,7 @@ use hyper::{header::HeaderValue, Body, Request, Response};
 mod client;
 use client::proxy;
 use server::RequestExt;
-use utils::{error, redirect};
+use utils::{error, redirect, ThemeAssets};
 
 mod server;
 
@@ -85,9 +85,26 @@ async fn resource(body: &str, content_type: &str, cache: bool) -> Result<Respons
 	Ok(res)
 }
 
+async fn style() -> Result<Response<Body>, String> {
+	let mut res = include_str!("../static/style.css").to_string();
+	for file in ThemeAssets::iter() {
+		res.push('\n');
+		let theme = ThemeAssets::get(file.as_ref()).unwrap();
+		res.push_str(std::str::from_utf8(theme.data.as_ref()).unwrap());
+	}
+	Ok(
+		Response::builder()
+			.status(200)
+			.header("content-type", "text/css")
+			.header("Cache-Control", "public, max-age=1209600, s-maxage=86400")
+			.body(res.to_string().into())
+			.unwrap_or_default(),
+	)
+}
+
 #[tokio::main]
 async fn main() {
-	let matches = Command::new("Libreddit")
+	let matches = Command::new("libbacon")
 		.version(env!("CARGO_PKG_VERSION"))
 		.about("Private front-end for Reddit written in Rust ")
 		.arg(
@@ -132,7 +149,7 @@ async fn main() {
 
 	let listener = [address, ":", &port].concat();
 
-	println!("Starting Libreddit...");
+	println!("Starting libbacon...");
 
 	// Begin constructing a server
 	let mut app = server::Server::new();
@@ -152,7 +169,7 @@ async fn main() {
 	}
 
 	// Read static files
-	app.at("/style.css").get(|_| resource(include_str!("../static/style.css"), "text/css", false).boxed());
+	app.at("/style.css").get(|_| style().boxed());
 	app
 		.at("/manifest.json")
 		.get(|_| resource(include_str!("../static/manifest.json"), "application/json", false).boxed());
@@ -171,7 +188,7 @@ async fn main() {
 		.at("/hls.min.js")
 		.get(|_| resource(include_str!("../static/hls.min.js"), "text/javascript", false).boxed());
 
-	// Proxy media through Libreddit
+	// Proxy media through libbacon
 	app.at("/vid/:id/:size").get(|r| proxy(r, "https://v.redd.it/{id}/DASH_{size}").boxed());
 	app.at("/hls/:id/*path").get(|r| proxy(r, "https://v.redd.it/{id}/{path}").boxed());
 	app.at("/img/*path").get(|r| proxy(r, "https://i.redd.it/{path}").boxed());
@@ -221,6 +238,11 @@ async fn main() {
 	app.at("/r/:sub/comments/:id").get(|r| post::item(r).boxed());
 	app.at("/r/:sub/comments/:id/:title").get(|r| post::item(r).boxed());
 	app.at("/r/:sub/comments/:id/:title/:comment_id").get(|r| post::item(r).boxed());
+	app.at("/comments/:id").get(|r| post::item(r).boxed());
+	app.at("/comments/:id/comments").get(|r| post::item(r).boxed());
+	app.at("/comments/:id/comments/:comment_id").get(|r| post::item(r).boxed());
+	app.at("/comments/:id/:title").get(|r| post::item(r).boxed());
+	app.at("/comments/:id/:title/:comment_id").get(|r| post::item(r).boxed());
 
 	app.at("/r/:sub/search").get(|r| search::find(r).boxed());
 
@@ -269,7 +291,7 @@ async fn main() {
 	// Default service in case no routes match
 	app.at("/*").get(|req| error(req, "Nothing here".to_string()).boxed());
 
-	println!("Running Libreddit v{} on {}!", env!("CARGO_PKG_VERSION"), listener);
+	println!("Running libbacon v{} on {}!", env!("CARGO_PKG_VERSION"), listener);
 
 	let server = app.listen(listener);
 

@@ -1,5 +1,4 @@
 // CRATES
-use crate::esc;
 use crate::utils::{
 	catch_random, error, filter_posts, format_num, format_url, get_filters, param, redirect, rewrite_urls, setting, template, val, Post, Preferences, Subreddit,
 };
@@ -11,7 +10,7 @@ use time::{Duration, OffsetDateTime};
 
 // STRUCTS
 #[derive(Template)]
-#[template(path = "subreddit.html", escape = "none")]
+#[template(path = "subreddit.html")]
 struct SubredditTemplate {
 	sub: Subreddit,
 	posts: Vec<Post>,
@@ -25,10 +24,12 @@ struct SubredditTemplate {
 	/// Whether all fetched posts are filtered (to differentiate between no posts fetched in the first place,
 	/// and all fetched posts being filtered).
 	all_posts_filtered: bool,
+	/// Whether all posts were hidden because they are NSFW (and user has disabled show NSFW)
+	all_posts_hidden_nsfw: bool,
 }
 
 #[derive(Template)]
-#[template(path = "wiki.html", escape = "none")]
+#[template(path = "wiki.html")]
 struct WikiTemplate {
 	sub: String,
 	wiki: String,
@@ -38,7 +39,7 @@ struct WikiTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "wall.html", escape = "none")]
+#[template(path = "wall.html")]
 struct WallTemplate {
 	title: String,
 	sub: String,
@@ -97,7 +98,7 @@ pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
 
 	let path = format!("/r/{}/{}.json?{}&raw_json=1", sub_name.clone(), sort, req.uri().query().unwrap_or_default());
 	let url = String::from(req.uri().path_and_query().map_or("", |val| val.as_str()));
-	let redirect_url = url[1..].replace('?', "%3F").replace('&', "%26");
+	let redirect_url = url[1..].replace('?', "%3F").replace('&', "%26").replace('+', "%2B");
 	let filters = get_filters(&req);
 
 	// If all requested subs are filtered, we don't need to fetch posts.
@@ -112,12 +113,13 @@ pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
 			redirect_url,
 			is_filtered: true,
 			all_posts_filtered: false,
+			all_posts_hidden_nsfw: false,
 		})
 	} else {
 		match Post::fetch(&path, quarantined).await {
 			Ok((mut posts, after)) => {
 				let all_posts_filtered = filter_posts(&mut posts, &filters);
-
+				let all_posts_hidden_nsfw = posts.iter().all(|p| p.flags.nsfw) && setting(&req, "show_nsfw") != "on";
 				template(SubredditTemplate {
 					sub,
 					posts,
@@ -128,6 +130,7 @@ pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
 					redirect_url,
 					is_filtered: false,
 					all_posts_filtered,
+					all_posts_hidden_nsfw,
 				})
 			}
 			Err(msg) => match msg.as_str() {
@@ -254,11 +257,7 @@ pub async fn subscriptions_filters(req: Request<Body>) -> Result<Response<Body>,
 
 	// Redirect back to subreddit
 	// check for redirect parameter if unsubscribing/unfiltering from outside sidebar
-	let path = if let Some(redirect_path) = param(&format!("?{}", query), "redirect") {
-		format!("/{}", redirect_path)
-	} else {
-		format!("/r/{}", sub)
-	};
+	let path = param(&format!("?{}", query), "redirect").map_or_else(|| format!("/r/{}", sub), |redirect_path| format!("/{}", redirect_path));
 
 	let mut response = redirect(path);
 
@@ -408,9 +407,9 @@ async fn subreddit(sub: &str, quarantined: bool) -> Result<Subreddit, String> {
 	let icon = if community_icon.is_empty() { val(&res, "icon_img") } else { community_icon.to_string() };
 
 	Ok(Subreddit {
-		name: esc!(&res, "display_name"),
-		title: esc!(&res, "title"),
-		description: esc!(&res, "public_description"),
+		name: val(&res, "display_name"),
+		title: val(&res, "title"),
+		description: val(&res, "public_description"),
 		info: rewrite_urls(&val(&res, "description_html")),
 		// moderators: moderators_list(sub, quarantined).await.unwrap_or_default(),
 		icon: format_url(&icon),

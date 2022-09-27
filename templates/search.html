@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% import "utils.html" as utils %}
 
-{% block title %}Libreddit: search results - {{ params.q }}{% endblock %}
+{% block title %}libbacon: search results - {{ params.q }}{% endblock %}
 
 {% block subscriptions %}
 	{% call utils::sub_list("") %}
@@ -10,7 +10,7 @@
 {% block content %}
 	<div id="column_one">
 		<form id="search_sort">
-			<input id="search" type="text" name="q" placeholder="Search" value="{{ params.q }}" title="Search libreddit">
+			<input id="search" type="text" name="q" placeholder="Search" value="{{ params.q }}" title="Search libbacon">
 			{% if sub != "" %}
 			<div id="inside">
 				<input type="checkbox" name="restrict_sr" id="restrict_sr" {% if params.restrict_sr != "" %}checked{% endif %}>
@@ -39,7 +39,7 @@
 			{% endif %}
 			{% for subreddit in subreddits %}
 			<a href="{{ subreddit.url }}" class="search_subreddit">
-				<div class="search_subreddit_left">{% if subreddit.icon != "" %}<img loading="lazy" src="{{ subreddit.icon }}" alt="r/{{ subreddit.name }} icon">{% endif %}</div>
+				<div class="search_subreddit_left">{% if subreddit.icon != "" %}<img loading="lazy" src="{{ subreddit.icon|safe }}" alt="r/{{ subreddit.name }} icon">{% endif %}</div>
 				<div class="search_subreddit_right">
 					<p class="search_subreddit_header"> 
 						<span class="search_subreddit_name">r/{{ subreddit.name }}</span>
@@ -56,6 +56,11 @@
 		</div>
 		{% endif %}
 		{% endif %}
+
+		{% if all_posts_hidden_nsfw %}
+		<center>All posts are hidden because they are NSFW. Enable "Show NSFW posts" in settings to view.</center>
+		{% endif %}
+
 		{% if all_posts_filtered %}
 			<center>(All content on this page has been filtered)</center>
 		{% else if is_filtered %}
@@ -92,13 +97,13 @@
 			{% if params.before != "" %}
 			<a href="?q={{ params.q }}&restrict_sr={{ params.restrict_sr }}
 				&sort={{ params.sort }}&t={{ params.t }}
-				&before={{ params.before }}">PREV</a>
+				&before={{ params.before }}" accesskey="P">PREV</a>
 			{% endif %}
 
 			{% if params.after != "" %}
 			<a href="?q={{ params.q }}&restrict_sr={{ params.restrict_sr }}
 				&sort={{ params.sort }}&t={{ params.t }}
-				&after={{ params.after }}">NEXT</a>
+				&after={{ params.after }}" accesskey="N">NEXT</a>
 			{% endif %}
 		</footer>
 		{% endif %}

@@ -1,6 +1,7 @@
 use cached::proc_macro::cached;
 use futures_lite::{future::Boxed, FutureExt};
 use hyper::{body::Buf, client, Body, Request, Response, Uri};
+use percent_encoding::{percent_encode, CONTROLS};
 use serde_json::Value;
 use std::result::Result;
 
@@ -26,7 +27,7 @@ async fn stream(url: &str, req: &Request<Body>) -> Result<Response<Body>, String
 	let https = hyper_rustls::HttpsConnectorBuilder::new().with_native_roots().https_only().enable_http1().build();
 
 	// Build the hyper client from the HTTPS connector.
-	let client: client::Client<_, hyper::Body> = client::Client::builder().build(https);
+	let client: client::Client<_, Body> = client::Client::builder().build(https);
 
 	let mut builder = Request::get(uri);
 
@@ -66,13 +67,13 @@ fn request(url: String, quarantine: bool) -> Boxed<Result<Response<Body>, String
 	let https = hyper_rustls::HttpsConnectorBuilder::new().with_native_roots().https_or_http().enable_http1().build();
 
 	// Construct the hyper client from the HTTPS connector.
-	let client: client::Client<_, hyper::Body> = client::Client::builder().build(https);
+	let client: client::Client<_, Body> = client::Client::builder().build(https);
 
 	// Build request
 	let builder = Request::builder()
 		.method("GET")
 		.uri(&url)
-		.header("User-Agent", format!("web:libreddit:{}", env!("CARGO_PKG_VERSION")))
+		.header("User-Agent", format!("web:libbacon:{}", env!("CARGO_PKG_VERSION")))
 		.header("Host", "www.reddit.com")
 		.header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
 		.header("Accept-Language", "en-US,en;q=0.5")
@@ -90,7 +91,7 @@ fn request(url: String, quarantine: bool) -> Boxed<Result<Response<Body>, String
 								.headers()
 								.get("Location")
 								.map(|val| {
-									let new_url = val.to_str().unwrap_or_default();
+									let new_url = percent_encode(val.as_bytes(), CONTROLS).to_string();
 									format!("{}{}raw_json=1", new_url, if new_url.contains('?') { "&" } else { "?" })
 								})
 								.unwrap_or_default()
