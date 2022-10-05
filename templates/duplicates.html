@@ -84,11 +84,11 @@
 
         <footer>
 			{% if params.before != "" %}
-			<a href="?before={{ params.before }}" accesskey="P">PREV</a>
+			<a href="?before={{ params.before }}{% if params.sort != "" %}&sort={{ params.sort }}{% endif %}" accesskey="P">PREV</a>
 			{% endif %}
 
 			{% if params.after != "" %}
-			<a href="?after={{ params.after }}" accesskey="N">NEXT</a>
+			<a href="?after={{ params.after }}{% if params.sort != "" %}&sort={{ params.sort }}{% endif %}" accesskey="N">NEXT</a>
 			{% endif %}
 		</footer>
     </div>

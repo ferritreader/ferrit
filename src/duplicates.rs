@@ -16,6 +16,7 @@ use std::vec::Vec;
 struct DuplicatesParams {
 	before: String,
 	after: String,
+	sort: String,
 }
 
 /// DuplicatesTemplate defines an Askama template for rendering duplicate
@@ -68,11 +69,14 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 			let post = parse_post(&response[0]["data"]["children"][0]).await;
 			let (duplicates, num_posts_filtered, all_posts_filtered) = parse_duplicates(&response[1], &filters).await;
 
+			// These are the values for the "before=", "after=", and "sort="
+			// query params, respectively.
 			let mut before: String = String::new();
 			let mut after: String = String::new();
+			let mut sort: String = String::new();
 
-			// FIXME: We have to perform this kludge to work around a Reddit
-			// API bug.
+			// FIXME: We have to perform a kludge to work around a Reddit API
+			// bug.
 			//
 			// The JSON object in "data" will never contain a "before" value so
 			// it is impossible to use it to determine our position in a
@@ -84,6 +88,10 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 			// result won't have an "after" in the JSON, in addition to missing
 			// the "before." So we will have to use the final post in the list
 			// of duplicates.
+			//
+			// That being said, we'll also need to capture the value of the
+			// "sort=" parameter as well, so we will need to inspect the
+			// query key-value pairs anyway.
 			let l = duplicates.len();
 			if l > 0 {
 				// This gets set to true if "before=" is one of the GET params.
@@ -92,6 +100,10 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 				// This gets set to true if "after=" is one of the GET params.
 				let mut have_after: bool = false;
 
+				// Inspect the query key-value pairs. We will need to record
+				// the value of "sort=", along with checking to see if either
+				// one of "before=" or "after=" are given.
+				//
 				// If we're in the middle of the batch (evidenced by the
 				// presence of a "before=" or "after=" parameter in the GET),
 				// then use the first post as the "before" reference.
@@ -101,24 +113,33 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 				// elements even after we've determined one of "before=" or
 				// "after=" (or both) are in the GET request.
 				//
-				// In practice, here should only ever be one of "before="" or
+				// In practice, here should only ever be one of "before=" or
 				// "after=" and never both.
-				for param_opt in req.uri().query().into_iter() {
-					let param: String = param_opt.to_string();
+				let query_str = req.uri().query().unwrap_or_default().to_string();
 
-					if param.starts_with("before=") {
-						have_before = true;
-					}
+				if !query_str.is_empty() {
+					let query: Vec<&str> = query_str.split('&').collect::<Vec<&str>>();
 
-					if param.starts_with("after=") {
-						have_after = true;
-					}
+					for param in query.into_iter() {
+						let kv: Vec<&str> = param.split('=').collect();
+						if kv.len() < 2 {
+							// Reject invalid query parameter.
+							continue;
+						}
 
-					if have_before && have_after {
-						// Successfully found both "before=" and "after=" in
-						// the GET. No need to investigate any of the remaining
-						// params.
-						break;
+						let key: &str = kv[0];
+						match key {
+							"before" => have_before = true,
+							"after" => have_after = true,
+							"sort" => {
+								let val: &str = kv[1];
+								match val {
+									"new" | "num_comments" => sort = val.to_string(),
+									_ => {}
+								}
+							}
+							_ => {}
+						}
 					}
 				}
 
@@ -145,10 +166,15 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 					// whether or not to define `before`.
 					//
 					// We'll mitigate that by requesting at most one duplicate.
-					let new_path: String = format!("{}.json?before=t3_{}&limit=1&raw_json=1", req.uri().path(), &duplicates[0].id);
+					let new_path: String = format!(
+						"{}.json?before=t3_{}&sort={}&limit=1&raw_json=1",
+						req.uri().path(),
+						&duplicates[0].id,
+						if sort.is_empty() { "num_comments".to_string() } else { sort.clone() }
+					);
 					match json(new_path, true).await {
 						Ok(response) => {
-							if (&response[1]["data"]["children"]).as_array().unwrap_or(&Vec::new()).len() > 0 {
+							if !response[1]["data"]["children"].as_array().unwrap_or(&Vec::new()).is_empty() {
 								before = "t3_".to_owned();
 								before.push_str(&duplicates[0].id);
 							}
@@ -166,7 +192,7 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 			let url = req.uri().to_string();
 
 			template(DuplicatesTemplate {
-				params: DuplicatesParams { before, after },
+				params: DuplicatesParams { before, after, sort },
 				post,
 				duplicates,
 				prefs: Preferences::new(req),
@@ -190,15 +216,15 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 
 // DUPLICATES
 async fn parse_duplicates(json: &serde_json::Value, filters: &HashSet<String>) -> (Vec<Post>, u64, bool) {
-	let post_duplicates: &Vec<Value> = &(json["data"]["children"]).as_array().map_or(Vec::new(), ToOwned::to_owned);
+	let post_duplicates: &Vec<Value> = &json["data"]["children"].as_array().map_or(Vec::new(), ToOwned::to_owned);
 	let mut duplicates: Vec<Post> = Vec::new();
 
 	// Process each post and place them in the Vec<Post>.
 	for val in post_duplicates.iter() {
-		let post: Post = parse_post(&val).await;
+		let post: Post = parse_post(val).await;
 		duplicates.push(post);
 	}
 
-	let (num_posts_filtered, all_posts_filtered) = filter_posts(&mut duplicates, &filters);
-	return (duplicates, num_posts_filtered, all_posts_filtered);
+	let (num_posts_filtered, all_posts_filtered) = filter_posts(&mut duplicates, filters);
+	(duplicates, num_posts_filtered, all_posts_filtered)
 }
