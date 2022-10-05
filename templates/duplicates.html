@@ -36,18 +36,18 @@
                 {% endif %}
             </span>
         {%- endif %}
-        <!-- SORT FORM -->
-		<form id="sort">
-			<select name="sort" title="Sort comments by"> 
-				{% call utils::options(params.sort, ["new", "num_comments"], "num_comments") %}
-			</select><button id="sort_submit" class="submit">
-				<svg width="15" viewBox="0 0 110 100" fill="none" stroke-width="10" stroke-linecap="round">
-					<path d="M20 50 H100" />
-					<path d="M75 15 L100 50 L75 85" />
-					&rarr;
-				</svg>
-			</button>
-		</form>
+
+        <div id="sort">
+            <div id="sort_options">
+                <a {% if params.sort.is_empty() || params.sort.eq("num_comments") %}class="selected"{% endif %} href="?sort=num_comments">
+                    Number of Comments
+                </a>
+                <a {% if params.sort.eq("new") %}class="selected"{% endif %} href="?sort=new">
+                    New
+                </a>
+            </div>
+        </div>
+        
         <div id="posts">
         {% for post in duplicates -%}
             {# TODO: utils::post should be reworked to permit a truncated display of a post as below #}
