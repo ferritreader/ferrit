@@ -19,3 +19,15 @@ Visit the [Instances wiki page](https://github.com/libbacon/ferrit/wiki/Instance
 ## Getting and Installing Ferrit
 
 Visit [Building, Installation, and Deployment](https://github.com/libbacon/ferrit/wiki/Building,-Installation,-and-Deployment) on the wiki for detailed instructions on how to obtain and set up Ferrit.
+
+## Comparison
+### Speed
+
+Last tested on Oct 11, 2022.
+
+Results from [yellowlab tools](https://yellowlab.tools/).
+|                        | [Libreddit](https://yellowlab.tools/result/gediwc3w6o)|[Reddit](https://yellowlab.tools/result/gediwsbyi4)|
+|------------------------|---------------|------------|
+| Requests               | 58            | 175        |
+| Resource Size (card ui)| 4.53 MB       | 9.37 MB    |
+| JS execution time      | **61 ms**     | **1915 ms** |
