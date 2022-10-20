@@ -850,11 +850,11 @@ pub async fn error(req: Request<Body>, msg: String) -> Result<Response<Body>, St
 	Ok(Response::builder().status(404).header("content-type", "text/html").body(body.into()).unwrap_or_default())
 }
 
-/// Set the LIBBACON_SFW_ONLY environment variable to anything, to enable SFW-only mode.
+/// Set the FERRIT_SFW_ONLY environment variable to anything, to enable SFW-only mode.
 /// If environment variable is set, this bool will be true. Otherwise it will be false.
 /// This variable is set by the instance operator, and as such, side-steps the user config
 pub fn sfw_only() -> bool {
-	env::var("LIBBACON_SFW_ONLY").is_ok()
+	env::var("FERRIT_SFW_ONLY").is_ok()
 }
 
 /// Render the landing page for NSFW content when the user has not enabled
