@@ -35,6 +35,15 @@
 			</div>
 			{% block search %}{% endblock %}
 			<div id="links">
+				{% if prefs.theme == "" || prefs.theme == "light" %} 
+				<a id="theme_change" href="/settings/restore/?theme=dark" rel="nofollow">
+					<span>🌚</span>
+				</a>
+				{% elseif prefs.theme == "dark" %}
+				<a id="theme_change" href="/settings/restore/?theme=light" rel="nofollow">
+					<span>🌞</span>
+				</a>
+				{% endif %}
 				<a id="reddit_link" href="https://www.reddit.com{{ url }}" rel="nofollow">
 					<span>reddit</span>
 					<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

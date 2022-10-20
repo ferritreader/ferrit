@@ -123,6 +123,10 @@ nav #ferrit_logo {
 	vertical-align: -2px;
 }
 
+#theme_change {
+	opacity: 0.8;
+}
+
 #settings_link {
 	opacity: 0.8;
 	margin-left: 10px;
@@ -130,6 +134,7 @@ nav #ferrit_logo {
 
 #reddit_link {
 	opacity: 0.8;
+	margin-left: 10px;
 }
 
 #code {
