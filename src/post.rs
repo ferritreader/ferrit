@@ -121,7 +121,7 @@ fn parse_comments(json: &serde_json::Value, post_link: &str, post_author: &str, 
 			let id = val(&comment, "id");
 			let highlighted = id == highlighted_comment;
 
-			let body = if (val(&comment, "author") == "[deleted]" && val(&comment, "body") == "[removed]") || val(&comment, "body") == "[deleted]"{
+			let body = if (val(&comment, "author") == "[deleted]" && val(&comment, "body") == "[removed]") || val(&comment, "body") == "[deleted]" {
 				format!(
 					"<div class=\"md\"><p>[removed] — <a href=\"https://www.unddit.com{}{}\">view removed comment</a></p></div>",
 					post_link, id
