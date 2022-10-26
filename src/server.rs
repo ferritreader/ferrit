@@ -62,7 +62,7 @@ impl CompressionType {
 }
 
 impl ToString for CompressionType {
-	fn to_string(self: &Self) -> String {
+	fn to_string(&self) -> String {
 		let s: &str = match *self {
 			CompressionType::Gzip => "gzip",
 			CompressionType::Brotli => "br",
@@ -306,7 +306,7 @@ async fn new_boilerplate(
 /// Accept-Encoding: br;q=1.0, gzip;q=0.8, *;q=0.1
 /// ```
 fn determine_compressor(accept_encoding: &str) -> Option<CompressionType> {
-	if accept_encoding.len() == 0 {
+	if accept_encoding.is_empty() {
 		return None;
 	};
 
@@ -353,7 +353,7 @@ fn determine_compressor(accept_encoding: &str) -> Option<CompressionType> {
 			// f64 and CompressionType are ordered, except in the case
 			// where the f64 is NAN (which we checked against), so we
 			// can safely return a Some here.
-			Some(self.cmp(&other))
+			Some(self.cmp(other))
 		}
 	}
 
@@ -377,12 +377,12 @@ fn determine_compressor(accept_encoding: &str) -> Option<CompressionType> {
 
 	// This loop reads the requested compressors and keeps track of whichever
 	// one has the highest priority per our heuristic.
-	for val in accept_encoding.to_string().split(",") {
+	for val in accept_encoding.to_string().split(',') {
 		let mut q: f64 = 1.0;
 
 		// The compressor and q-value (if the latter is defined)
 		// will be delimited by semicolons.
-		let mut spl: Split<&str> = val.split(";");
+		let mut spl: Split<char> = val.split(';');
 
 		// Get the compressor. For example, in
 		//   gzip;q=0.8
@@ -390,7 +390,7 @@ fn determine_compressor(accept_encoding: &str) -> Option<CompressionType> {
 		// will further validate the compressor against the
 		// list of those we support. If it is not supported,
 		// we move onto the next one.
-		let compressor: CompressionType = match spl.nth(0) {
+		let compressor: CompressionType = match spl.next() {
 			// CompressionType::parse will return the appropriate enum given
 			// a string. For example, it will return CompressionType::Gzip
 			// when given "gzip".
@@ -407,7 +407,7 @@ fn determine_compressor(accept_encoding: &str) -> Option<CompressionType> {
 
 		// Get the q-value. This might not be defined, in which case assume
 		// 1.0.
-		if let Some(s) = spl.nth(0) {
+		if let Some(s) = spl.next() {
 			if !(s.len() > 2 && s.starts_with("q=")) {
 				// If the q-value is malformed, the header is malformed, so
 				// abort.
@@ -416,7 +416,7 @@ fn determine_compressor(accept_encoding: &str) -> Option<CompressionType> {
 
 			match s[2..].parse::<f64>() {
 				Ok(val) => {
-					if (val >= 0.0) && (val <= 1.0) {
+					if (0.0..=1.0).contains(&val) {
 						q = val;
 					} else {
 						// If the value is outside [0..1], header is malformed.
@@ -436,14 +436,11 @@ fn determine_compressor(accept_encoding: &str) -> Option<CompressionType> {
 		// cur_candidate. But do this safely! It is very possible that
 		// someone gave us the string "NAN", which (&str).parse::<f64>
 		// will happily translate to f64::NAN.
-		let new_candidate = CompressorCandidate { alg: compressor, q: q };
-		match new_candidate.partial_cmp(&cur_candidate) {
-			Some(ord) => {
-				if ord == Ordering::Greater {
-					cur_candidate = new_candidate;
-				}
+		let new_candidate = CompressorCandidate { alg: compressor, q };
+		if let Some(ord) = new_candidate.partial_cmp(&cur_candidate) {
+			if ord == Ordering::Greater {
+				cur_candidate = new_candidate;
 			}
-			None => {}
 		};
 	}
 
@@ -601,7 +598,7 @@ async fn compress_response(req_headers: HeaderMap<header::HeaderValue>, res: &mu
 	res.headers_mut().insert(header::CONTENT_ENCODING, compressor.to_string().parse().unwrap());
 	*(res.body_mut()) = Body::from(compressed);
 
-	return Ok(());
+	Ok(())
 }
 
 #[cfg(test)]
