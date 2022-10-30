@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use crate::config::Config;
 // CRATES
 use crate::server::ResponseExt;
 use crate::utils::{redirect, template, Preferences};
@@ -36,10 +38,10 @@ const PREFS: [&str; 11] = [
 // FUNCTIONS
 
 // Retrieve cookies from request "Cookie" header
-pub async fn get(req: Request<Body>) -> Result<Response<Body>, String> {
+pub async fn get(req: Request<Body>, config: Arc<Config>) -> Result<Response<Body>, String> {
 	let url = req.uri().to_string();
 	template(SettingsTemplate {
-		prefs: Preferences::new(req),
+		prefs: Preferences::new(req, config),
 		url,
 	})
 }

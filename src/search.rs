@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use crate::config::Config;
 // CRATES
 use crate::utils::{self, catch_random, error, filter_posts, format_num, format_url, get_filters, param, redirect, setting, template, val, Post, Preferences};
 use crate::{
@@ -47,9 +50,9 @@ struct SearchTemplate {
 }
 
 // SERVICES
-pub async fn find(req: Request<Body>) -> Result<Response<Body>, String> {
+pub async fn find(req: Request<Body>, config: Arc<Config>) -> Result<Response<Body>, String> {
 	// This ensures that during a search, no NSFW posts are fetched at all
-	let nsfw_results = if setting(&req, "show_nsfw") == "on" && !utils::sfw_only() {
+	let nsfw_results = if setting(&req, "show_nsfw", config.clone()) == "on" && !utils::sfw_only() {
 		"&include_over_18=on"
 	} else {
 		""
@@ -66,7 +69,7 @@ pub async fn find(req: Request<Body>) -> Result<Response<Body>, String> {
 	}
 
 	let sub = req.param("sub").unwrap_or_default();
-	let quarantined = can_access_quarantine(&req, &sub);
+	let quarantined = can_access_quarantine(&req, &sub, config.clone());
 	// Handle random subreddits
 	if let Ok(random) = catch_random(&sub, "/find").await {
 		return Ok(random);
@@ -75,7 +78,7 @@ pub async fn find(req: Request<Body>) -> Result<Response<Body>, String> {
 	let typed = param(&path, "type").unwrap_or_default();
 
 	let sort = param(&path, "sort").unwrap_or_else(|| "relevance".to_string());
-	let filters = get_filters(&req);
+	let filters = get_filters(&req, config.clone());
 
 	// If search is not restricted to this subreddit, show other subreddits in search results
 	let subreddits = if param(&path, "restrict_sr").is_none() {
@@ -103,7 +106,7 @@ pub async fn find(req: Request<Body>) -> Result<Response<Body>, String> {
 				restrict_sr: param(&path, "restrict_sr").unwrap_or_default(),
 				typed,
 			},
-			prefs: Preferences::new(req),
+			prefs: Preferences::new(req, config.clone()),
 			url,
 			is_filtered: true,
 			all_posts_filtered: false,
@@ -113,7 +116,7 @@ pub async fn find(req: Request<Body>) -> Result<Response<Body>, String> {
 		match Post::fetch(&path, quarantined).await {
 			Ok((mut posts, after)) => {
 				let (_, all_posts_filtered) = filter_posts(&mut posts, &filters);
-				let all_posts_hidden_nsfw = posts.iter().all(|p| p.flags.nsfw) && setting(&req, "show_nsfw") != "on";
+				let all_posts_hidden_nsfw = posts.iter().all(|p| p.flags.nsfw) && setting(&req, "show_nsfw", config.clone()) != "on";
 				template(SearchTemplate {
 					posts,
 					subreddits,
@@ -127,7 +130,7 @@ pub async fn find(req: Request<Body>) -> Result<Response<Body>, String> {
 						restrict_sr: param(&path, "restrict_sr").unwrap_or_default(),
 						typed,
 					},
-					prefs: Preferences::new(req),
+					prefs: Preferences::new(req, config.clone()),
 					url,
 					is_filtered: false,
 					all_posts_filtered,
@@ -137,9 +140,9 @@ pub async fn find(req: Request<Body>) -> Result<Response<Body>, String> {
 			Err(msg) => {
 				if msg == "quarantined" {
 					let sub = req.param("sub").unwrap_or_default();
-					quarantine(req, sub)
+					quarantine(req, sub, config.clone())
 				} else {
-					error(req, msg).await
+					error(req, msg, config.clone()).await
 				}
 			}
 		}

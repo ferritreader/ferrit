@@ -1,5 +1,6 @@
 // CRATES
 use crate::client::json;
+use crate::config::Config;
 use crate::server::RequestExt;
 use crate::subreddit::{can_access_quarantine, quarantine};
 use crate::utils::{
@@ -9,6 +10,7 @@ use hyper::{Body, Request, Response};
 
 use askama::Template;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 // STRUCTS
 #[derive(Template)]
@@ -22,16 +24,17 @@ struct PostTemplate {
 	url: String,
 }
 
-pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
+pub async fn item(req: Request<Body>, config: Arc<Config>) -> Result<Response<Body>, String> {
+	let config = config.clone();
 	// Build Reddit API path
 	let mut path: String = format!("{}.json?{}&raw_json=1", req.uri().path(), req.uri().query().unwrap_or_default());
 	let sub = req.param("sub").unwrap_or_default();
-	let quarantined = can_access_quarantine(&req, &sub);
+	let quarantined = can_access_quarantine(&req, &sub, config.clone());
 
 	// Set sort to sort query parameter
 	let sort = param(&path, "sort").unwrap_or_else(|| {
 		// Grab default comment sort method from Cookies
-		let default_sort = setting(&req, "comment_sort");
+		let default_sort = setting(&req, "comment_sort", config.clone());
 
 		// If there's no sort query but there's a default sort, set sort to default_sort
 		if default_sort.is_empty() {
@@ -59,11 +62,11 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 			// Return landing page if this post if this Reddit deems this post
 			// NSFW, but we have also disabled the display of NSFW content
 			// or if the instance is SFW-only.
-			if post.nsfw && (setting(&req, "show_nsfw") != "on" || crate::utils::sfw_only()) {
-				return Ok(nsfw_landing(req).await.unwrap_or_default());
+			if post.nsfw && (setting(&req, "show_nsfw", config.clone()) != "on" || crate::utils::sfw_only()) {
+				return Ok(nsfw_landing(req, config.clone()).await.unwrap_or_default());
 			}
 
-			let comments = parse_comments(&response[1], &post.permalink, &post.author.name, highlighted_comment, &get_filters(&req));
+			let comments = parse_comments(&response[1], &post.permalink, &post.author.name, highlighted_comment, &get_filters(&req, config.clone()));
 			let url = req.uri().to_string();
 
 			// Use the Post and Comment structs to generate a website to show users
@@ -71,7 +74,7 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 				comments,
 				post,
 				sort,
-				prefs: Preferences::new(req),
+				prefs: Preferences::new(req, config.clone()),
 				single_thread,
 				url,
 			})
@@ -80,9 +83,9 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 		Err(msg) => {
 			if msg == "quarantined" {
 				let sub = req.param("sub").unwrap_or_default();
-				quarantine(req, sub)
+				quarantine(req, sub, config)
 			} else {
-				error(req, msg).await
+				error(req, msg, config).await
 			}
 		}
 	}

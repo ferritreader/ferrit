@@ -40,6 +40,9 @@
     },
     "FERRIT_HIDE_HLS_NOTIFICATION": {
       "required": false
+    },
+    "FERRIT_SFW_ONLY": {
+      "required": false
     }
   }
 }

@@ -1,3 +1,4 @@
+use crate::config::Config;
 //
 // CRATES
 //
@@ -11,6 +12,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::str::FromStr;
+use std::sync::Arc;
 use time::{macros::format_description, Duration, OffsetDateTime};
 use url::Url;
 
@@ -517,7 +519,7 @@ pub struct ThemeAssets;
 
 impl Preferences {
 	// Build preferences from cookies
-	pub fn new(req: Request<Body>) -> Self {
+	pub fn new(req: Request<Body>, config: Arc<Config>) -> Self {
 		// Read available theme names from embedded css files.
 		// Always make the default "system" theme available.
 		let mut themes = vec!["system".to_string()];
@@ -527,26 +529,34 @@ impl Preferences {
 		}
 		Self {
 			available_themes: themes,
-			theme: setting(&req, "theme"),
-			front_page: setting(&req, "front_page"),
-			layout: setting(&req, "layout"),
-			wide: setting(&req, "wide"),
-			show_nsfw: setting(&req, "show_nsfw"),
-			blur_nsfw: setting(&req, "blur_nsfw"),
-			use_hls: setting(&req, "use_hls"),
-			hide_hls_notification: setting(&req, "hide_hls_notification"),
-			autoplay_videos: setting(&req, "autoplay_videos"),
-			comment_sort: setting(&req, "comment_sort"),
-			post_sort: setting(&req, "post_sort"),
-			subscriptions: setting(&req, "subscriptions").split('+').map(String::from).filter(|s| !s.is_empty()).collect(),
-			filters: setting(&req, "filters").split('+').map(String::from).filter(|s| !s.is_empty()).collect(),
+			theme: setting(&req, "theme", config.clone()),
+			front_page: setting(&req, "front_page", config.clone()),
+			layout: setting(&req, "layout", config.clone()),
+			wide: setting(&req, "wide", config.clone()),
+			show_nsfw: setting(&req, "show_nsfw", config.clone()),
+			blur_nsfw: setting(&req, "blur_nsfw", config.clone()),
+			use_hls: setting(&req, "use_hls", config.clone()),
+			hide_hls_notification: setting(&req, "hide_hls_notification", config.clone()),
+			autoplay_videos: setting(&req, "autoplay_videos", config.clone()),
+			comment_sort: setting(&req, "comment_sort", config.clone()),
+			post_sort: setting(&req, "post_sort", config.clone()),
+			subscriptions: setting(&req, "subscriptions", config.clone())
+				.split('+')
+				.map(String::from)
+				.filter(|s| !s.is_empty())
+				.collect(),
+			filters: setting(&req, "filters", config).split('+').map(String::from).filter(|s| !s.is_empty()).collect(),
 		}
 	}
 }
 
 /// Gets a `HashSet` of filters from the cookie in the given `Request`.
-pub fn get_filters(req: &Request<Body>) -> HashSet<String> {
-	setting(req, "filters").split('+').map(String::from).filter(|s| !s.is_empty()).collect::<HashSet<String>>()
+pub fn get_filters(req: &Request<Body>, config: Arc<Config>) -> HashSet<String> {
+	setting(req, "filters", config)
+		.split('+')
+		.map(String::from)
+		.filter(|s| !s.is_empty())
+		.collect::<HashSet<String>>()
 }
 
 /// Filters a `Vec<Post>` by the given `HashSet` of filters (each filter being
@@ -675,13 +685,13 @@ pub fn param(path: &str, value: &str) -> Option<String> {
 }
 
 // Retrieve the value of a setting by name
-pub fn setting(req: &Request<Body>, name: &str) -> String {
+pub fn setting(req: &Request<Body>, name: &str, config: Arc<Config>) -> String {
 	// Parse a cookie value from request
 	req
 		.cookie(name)
 		.unwrap_or_else(|| {
-			// If there is no cookie for this setting, try receiving a default from an environment variable
-			if let Ok(default) = std::env::var(format!("FERRIT_DEFAULT_{}", name.to_uppercase())) {
+			// If there is no cookie for this setting, try receiving a default from the config
+			if let Some(default) = config.get_setting(&format!("FERRIT_DEFAULT_{}", name.to_uppercase())) {
 				Cookie::new(name, default)
 			} else {
 				Cookie::named(name)
@@ -852,11 +862,11 @@ pub fn redirect(path: String) -> Response<Body> {
 		.unwrap_or_default()
 }
 
-pub async fn error(req: Request<Body>, msg: String) -> Result<Response<Body>, String> {
+pub async fn error(req: Request<Body>, msg: String, config: Arc<Config>) -> Result<Response<Body>, String> {
 	let url = req.uri().to_string();
 	let body = ErrorTemplate {
 		msg,
-		prefs: Preferences::new(req),
+		prefs: Preferences::new(req, config),
 		url,
 	}
 	.render()
@@ -874,7 +884,7 @@ pub fn sfw_only() -> bool {
 
 /// Render the landing page for NSFW content when the user has not enabled
 /// "show NSFW posts" in settings.
-pub async fn nsfw_landing(req: Request<Body>) -> Result<Response<Body>, String> {
+pub async fn nsfw_landing(req: Request<Body>, config: Arc<Config>) -> Result<Response<Body>, String> {
 	let res_type: ResourceType;
 	let url = req.uri().to_string();
 
@@ -894,7 +904,7 @@ pub async fn nsfw_landing(req: Request<Body>) -> Result<Response<Body>, String> 
 	let body = NSFWLandingTemplate {
 		res,
 		res_type,
-		prefs: Preferences::new(req),
+		prefs: Preferences::new(req, config),
 		url,
 	}
 	.render()

@@ -1,6 +1,7 @@
 // Handler for post duplicates.
 
 use crate::client::json;
+use crate::config::Config;
 use crate::server::RequestExt;
 use crate::subreddit::{can_access_quarantine, quarantine};
 use crate::utils::{error, filter_posts, get_filters, nsfw_landing, parse_post, setting, template, Post, Preferences};
@@ -10,6 +11,7 @@ use hyper::{Body, Request, Response};
 use serde_json::Value;
 use std::borrow::ToOwned;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::vec::Vec;
 
 /// DuplicatesParams contains the parameters in the URL.
@@ -52,10 +54,10 @@ struct DuplicatesTemplate {
 
 /// Make the GET request to Reddit. It assumes `req` is the appropriate Reddit
 /// REST endpoint for enumerating post duplicates.
-pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
+pub async fn item(req: Request<Body>, config: Arc<Config>) -> Result<Response<Body>, String> {
 	let path: String = format!("{}.json?{}&raw_json=1", req.uri().path(), req.uri().query().unwrap_or_default());
 	let sub = req.param("sub").unwrap_or_default();
-	let quarantined = can_access_quarantine(&req, &sub);
+	let quarantined = can_access_quarantine(&req, &sub, config.clone());
 
 	// Log the request in debugging mode
 	#[cfg(debug_assertions)]
@@ -70,11 +72,11 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 			// Return landing page if this post if this Reddit deems this post
 			// NSFW, but we have also disabled the display of NSFW content
 			// or if the instance is SFW-only.
-			if post.nsfw && (setting(&req, "show_nsfw") != "on" || crate::utils::sfw_only()) {
-				return Ok(nsfw_landing(req).await.unwrap_or_default());
+			if post.nsfw && (setting(&req, "show_nsfw", config.clone()) != "on" || crate::utils::sfw_only()) {
+				return Ok(nsfw_landing(req, config.clone()).await.unwrap_or_default());
 			}
 
-			let filters = get_filters(&req);
+			let filters = get_filters(&req, config.clone());
 			let (duplicates, num_posts_filtered, all_posts_filtered) = parse_duplicates(&response[1], &filters).await;
 
 			// These are the values for the "before=", "after=", and "sort="
@@ -188,7 +190,7 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 						Err(msg) => {
 							// Abort entirely if we couldn't get the previous
 							// batch.
-							return error(req, msg).await;
+							return error(req, msg, config.clone()).await;
 						}
 					}
 				} else {
@@ -201,7 +203,7 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 				params: DuplicatesParams { before, after, sort },
 				post,
 				duplicates,
-				prefs: Preferences::new(req),
+				prefs: Preferences::new(req, config.clone()),
 				url,
 				num_posts_filtered,
 				all_posts_filtered,
@@ -212,9 +214,9 @@ pub async fn item(req: Request<Body>) -> Result<Response<Body>, String> {
 		Err(msg) => {
 			if msg == "quarantined" {
 				let sub = req.param("sub").unwrap_or_default();
-				quarantine(req, sub)
+				quarantine(req, sub, config.clone())
 			} else {
-				error(req, msg).await
+				error(req, msg, config.clone()).await
 			}
 		}
 	}

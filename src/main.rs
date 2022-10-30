@@ -3,6 +3,7 @@
 #![allow(clippy::cmp_owned)]
 
 // Reference local files
+mod config;
 mod duplicates;
 mod post;
 mod search;
@@ -15,7 +16,7 @@ mod utils;
 use clap::{Arg, Command};
 
 use futures_lite::FutureExt;
-use hyper::{header::HeaderValue, Body, Request, Response};
+use hyper::{header::HeaderValue, Body, Response};
 
 mod client;
 use client::proxy;
@@ -170,132 +171,134 @@ async fn main() {
 	}
 
 	// Read static files
-	app.at("/style.css").get(|_| style().boxed());
+	app.at("/style.css").get(|_, _| style().boxed());
 	app
 		.at("/manifest.json")
-		.get(|_| resource(include_str!("../static/manifest.json"), "application/json", false).boxed());
+		.get(|_, _| resource(include_str!("../static/manifest.json"), "application/json", false).boxed());
 	app
 		.at("/robots.txt")
-		.get(|_| resource("User-agent: *\nDisallow: /u/\nDisallow: /user/", "text/plain", true).boxed());
-	app.at("/favicon.ico").get(|_| favicon().boxed());
-	app.at("/logo.png").get(|_| pwa_logo().boxed());
-	app.at("/Inter.var.woff2").get(|_| font().boxed());
-	app.at("/touch-icon-iphone.png").get(|_| iphone_logo().boxed());
-	app.at("/apple-touch-icon.png").get(|_| iphone_logo().boxed());
+		.get(|_, _| resource("User-agent: *\nDisallow: /u/\nDisallow: /user/", "text/plain", true).boxed());
+	app.at("/favicon.ico").get(|_, _| favicon().boxed());
+	app.at("/logo.png").get(|_, _| pwa_logo().boxed());
+	app.at("/Inter.var.woff2").get(|_, _| font().boxed());
+	app.at("/touch-icon-iphone.png").get(|_, _| iphone_logo().boxed());
+	app.at("/apple-touch-icon.png").get(|_, _| iphone_logo().boxed());
 	app
 		.at("/playHLSVideo.js")
-		.get(|_| resource(include_str!("../static/playHLSVideo.js"), "text/javascript", false).boxed());
+		.get(|_, _| resource(include_str!("../static/playHLSVideo.js"), "text/javascript", false).boxed());
 	app
 		.at("/hls.min.js")
-		.get(|_| resource(include_str!("../static/hls.min.js"), "text/javascript", false).boxed());
+		.get(|_, _| resource(include_str!("../static/hls.min.js"), "text/javascript", false).boxed());
 
 	// Proxy media through Ferrit
-	app.at("/vid/:id/:size").get(|r| proxy(r, "https://v.redd.it/{id}/DASH_{size}").boxed());
-	app.at("/hls/:id/*path").get(|r| proxy(r, "https://v.redd.it/{id}/{path}").boxed());
-	app.at("/img/*path").get(|r| proxy(r, "https://i.redd.it/{path}").boxed());
-	app.at("/thumb/:point/:id").get(|r| proxy(r, "https://{point}.thumbs.redditmedia.com/{id}").boxed());
-	app.at("/emoji/:id/:name").get(|r| proxy(r, "https://emoji.redditmedia.com/{id}/{name}").boxed());
+	app.at("/vid/:id/:size").get(|r, _| proxy(r, "https://v.redd.it/{id}/DASH_{size}").boxed());
+	app.at("/hls/:id/*path").get(|r, _| proxy(r, "https://v.redd.it/{id}/{path}").boxed());
+	app.at("/img/*path").get(|r, _| proxy(r, "https://i.redd.it/{path}").boxed());
+	app.at("/thumb/:point/:id").get(|r, _| proxy(r, "https://{point}.thumbs.redditmedia.com/{id}").boxed());
+	app.at("/emoji/:id/:name").get(|r, _| proxy(r, "https://emoji.redditmedia.com/{id}/{name}").boxed());
 	app
 		.at("/preview/:loc/award_images/:fullname/:id")
-		.get(|r| proxy(r, "https://{loc}view.redd.it/award_images/{fullname}/{id}").boxed());
-	app.at("/preview/:loc/:id").get(|r| proxy(r, "https://{loc}view.redd.it/{id}").boxed());
-	app.at("/style/*path").get(|r| proxy(r, "https://styles.redditmedia.com/{path}").boxed());
-	app.at("/static/*path").get(|r| proxy(r, "https://www.redditstatic.com/{path}").boxed());
+		.get(|r, _| proxy(r, "https://{loc}view.redd.it/award_images/{fullname}/{id}").boxed());
+	app.at("/preview/:loc/:id").get(|r, _| proxy(r, "https://{loc}view.redd.it/{id}").boxed());
+	app.at("/style/*path").get(|r, _| proxy(r, "https://styles.redditmedia.com/{path}").boxed());
+	app.at("/static/*path").get(|r, _| proxy(r, "https://www.redditstatic.com/{path}").boxed());
 
 	// Browse user profile
 	app
 		.at("/u/:name")
-		.get(|r| async move { Ok(redirect(format!("/user/{}", r.param("name").unwrap_or_default()))) }.boxed());
-	app.at("/u/:name/comments/:id/:title").get(|r| post::item(r).boxed());
-	app.at("/u/:name/comments/:id/:title/:comment_id").get(|r| post::item(r).boxed());
+		.get(|r, _| async move { Ok(redirect(format!("/user/{}", r.param("name").unwrap_or_default()))) }.boxed());
+	app.at("/u/:name/comments/:id/:title").get(|r, config| post::item(r, config).boxed());
+	app.at("/u/:name/comments/:id/:title/:comment_id").get(|r, config| post::item(r, config).boxed());
 
-	app.at("/user/[deleted]").get(|req| error(req, "User has deleted their account".to_string()).boxed());
-	app.at("/user/:name").get(|r| user::profile(r).boxed());
-	app.at("/user/:name/:listing").get(|r| user::profile(r).boxed());
-	app.at("/user/:name/comments/:id").get(|r| post::item(r).boxed());
-	app.at("/user/:name/comments/:id/:title").get(|r| post::item(r).boxed());
-	app.at("/user/:name/comments/:id/:title/:comment_id").get(|r| post::item(r).boxed());
+	app
+		.at("/user/[deleted]")
+		.get(|req, config| error(req, "User has deleted their account".to_string(), config).boxed());
+	app.at("/user/:name").get(|r, config| user::profile(r, config).boxed());
+	app.at("/user/:name/:listing").get(|r, config| user::profile(r, config).boxed());
+	app.at("/user/:name/comments/:id").get(|r, config| post::item(r, config).boxed());
+	app.at("/user/:name/comments/:id/:title").get(|r, config| post::item(r, config).boxed());
+	app.at("/user/:name/comments/:id/:title/:comment_id").get(|r, config| post::item(r, config).boxed());
 
 	// Configure settings
-	app.at("/settings").get(|r| settings::get(r).boxed()).post(|r| settings::set(r).boxed());
-	app.at("/settings/restore").get(|r| settings::restore(r).boxed());
-	app.at("/settings/update").get(|r| settings::update(r).boxed());
+	app.at("/settings").get(|r, config| settings::get(r, config).boxed()).post(|r, _| settings::set(r).boxed());
+	app.at("/settings/restore").get(|r, _| settings::restore(r).boxed());
+	app.at("/settings/update").get(|r, _| settings::update(r).boxed());
 
 	// Subreddit services
 	app
 		.at("/r/:sub")
-		.get(|r| subreddit::community(r).boxed())
-		.post(|r| subreddit::add_quarantine_exception(r).boxed());
+		.get(|r, config| subreddit::community(r, config).boxed())
+		.post(|r, _| subreddit::add_quarantine_exception(r).boxed());
 
 	app
 		.at("/r/u_:name")
-		.get(|r| async move { Ok(redirect(format!("/user/{}", r.param("name").unwrap_or_default()))) }.boxed());
+		.get(|r, _| async move { Ok(redirect(format!("/user/{}", r.param("name").unwrap_or_default()))) }.boxed());
 
-	app.at("/r/:sub/subscribe").post(|r| subreddit::subscriptions_filters(r).boxed());
-	app.at("/r/:sub/unsubscribe").post(|r| subreddit::subscriptions_filters(r).boxed());
-	app.at("/r/:sub/filter").post(|r| subreddit::subscriptions_filters(r).boxed());
-	app.at("/r/:sub/unfilter").post(|r| subreddit::subscriptions_filters(r).boxed());
+	app.at("/r/:sub/subscribe").post(|r, config| subreddit::subscriptions_filters(r, config).boxed());
+	app.at("/r/:sub/unsubscribe").post(|r, config| subreddit::subscriptions_filters(r, config).boxed());
+	app.at("/r/:sub/filter").post(|r, config| subreddit::subscriptions_filters(r, config).boxed());
+	app.at("/r/:sub/unfilter").post(|r, config| subreddit::subscriptions_filters(r, config).boxed());
 
-	app.at("/r/:sub/comments/:id").get(|r| post::item(r).boxed());
-	app.at("/r/:sub/comments/:id/:title").get(|r| post::item(r).boxed());
-	app.at("/r/:sub/comments/:id/:title/:comment_id").get(|r| post::item(r).boxed());
-	app.at("/comments/:id").get(|r| post::item(r).boxed());
-	app.at("/comments/:id/comments").get(|r| post::item(r).boxed());
-	app.at("/comments/:id/comments/:comment_id").get(|r| post::item(r).boxed());
-	app.at("/comments/:id/:title").get(|r| post::item(r).boxed());
-	app.at("/comments/:id/:title/:comment_id").get(|r| post::item(r).boxed());
+	app.at("/r/:sub/comments/:id").get(|r, config| post::item(r, config).boxed());
+	app.at("/r/:sub/comments/:id/:title").get(|r, config| post::item(r, config).boxed());
+	app.at("/r/:sub/comments/:id/:title/:comment_id").get(|r, config| post::item(r, config).boxed());
+	app.at("/comments/:id").get(|r, config| post::item(r, config).boxed());
+	app.at("/comments/:id/comments").get(|r, config| post::item(r, config).boxed());
+	app.at("/comments/:id/comments/:comment_id").get(|r, config| post::item(r, config).boxed());
+	app.at("/comments/:id/:title").get(|r, config| post::item(r, config).boxed());
+	app.at("/comments/:id/:title/:comment_id").get(|r, config| post::item(r, config).boxed());
 
-	app.at("/r/:sub/duplicates/:id").get(|r| duplicates::item(r).boxed());
-	app.at("/r/:sub/duplicates/:id/:title").get(|r| duplicates::item(r).boxed());
-	app.at("/duplicates/:id").get(|r| duplicates::item(r).boxed());
-	app.at("/duplicates/:id/:title").get(|r| duplicates::item(r).boxed());
+	app.at("/r/:sub/duplicates/:id").get(|r, config| duplicates::item(r, config).boxed());
+	app.at("/r/:sub/duplicates/:id/:title").get(|r, config| duplicates::item(r, config).boxed());
+	app.at("/duplicates/:id").get(|r, config| duplicates::item(r, config).boxed());
+	app.at("/duplicates/:id/:title").get(|r, config| duplicates::item(r, config).boxed());
 
-	app.at("/r/:sub/search").get(|r| search::find(r).boxed());
+	app.at("/r/:sub/search").get(|r, config| search::find(r, config).boxed());
 
 	app
 		.at("/r/:sub/w")
-		.get(|r| async move { Ok(redirect(format!("/r/{}/wiki", r.param("sub").unwrap_or_default()))) }.boxed());
+		.get(|r, _| async move { Ok(redirect(format!("/r/{}/wiki", r.param("sub").unwrap_or_default()))) }.boxed());
 	app
 		.at("/r/:sub/w/*page")
-		.get(|r| async move { Ok(redirect(format!("/r/{}/wiki/{}", r.param("sub").unwrap_or_default(), r.param("wiki").unwrap_or_default()))) }.boxed());
-	app.at("/r/:sub/wiki").get(|r| subreddit::wiki(r).boxed());
-	app.at("/r/:sub/wiki/*page").get(|r| subreddit::wiki(r).boxed());
+		.get(|r, _| async move { Ok(redirect(format!("/r/{}/wiki/{}", r.param("sub").unwrap_or_default(), r.param("wiki").unwrap_or_default()))) }.boxed());
+	app.at("/r/:sub/wiki").get(|r, config| subreddit::wiki(r, config).boxed());
+	app.at("/r/:sub/wiki/*page").get(|r, config| subreddit::wiki(r, config).boxed());
 
-	app.at("/r/:sub/about/sidebar").get(|r| subreddit::sidebar(r).boxed());
+	app.at("/r/:sub/about/sidebar").get(|r, config| subreddit::sidebar(r, config).boxed());
 
-	app.at("/r/:sub/:sort").get(|r| subreddit::community(r).boxed());
+	app.at("/r/:sub/:sort").get(|r, config| subreddit::community(r, config).boxed());
 
 	// Comments handler
-	app.at("/comments/:id").get(|r| post::item(r).boxed());
+	app.at("/comments/:id").get(|r, config| post::item(r, config).boxed());
 
 	// Front page
-	app.at("/").get(|r| subreddit::community(r).boxed());
+	app.at("/").get(|r, config| subreddit::community(r, config).boxed());
 
 	// View Reddit wiki
-	app.at("/w").get(|_| async { Ok(redirect("/wiki".to_string())) }.boxed());
+	app.at("/w").get(|_, _| async { Ok(redirect("/wiki".to_string())) }.boxed());
 	app
 		.at("/w/*page")
-		.get(|r| async move { Ok(redirect(format!("/wiki/{}", r.param("page").unwrap_or_default()))) }.boxed());
-	app.at("/wiki").get(|r| subreddit::wiki(r).boxed());
-	app.at("/wiki/*page").get(|r| subreddit::wiki(r).boxed());
+		.get(|r, _| async move { Ok(redirect(format!("/wiki/{}", r.param("page").unwrap_or_default()))) }.boxed());
+	app.at("/wiki").get(|r, config| subreddit::wiki(r, config).boxed());
+	app.at("/wiki/*page").get(|r, config| subreddit::wiki(r, config).boxed());
 
 	// Search all of Reddit
-	app.at("/search").get(|r| search::find(r).boxed());
+	app.at("/search").get(|r, config| search::find(r, config).boxed());
 
 	// Handle about pages
-	app.at("/about").get(|req| error(req, "About pages aren't added yet".to_string()).boxed());
+	app.at("/about").get(|req, config| error(req, "About pages aren't added yet".to_string(), config).boxed());
 
-	app.at("/:id").get(|req: Request<Body>| match req.param("id").as_deref() {
+	app.at("/:id").get(|req, config| match req.param("id").as_deref() {
 		// Sort front page
-		Some("best" | "hot" | "new" | "top" | "rising" | "controversial") => subreddit::community(req).boxed(),
+		Some("best" | "hot" | "new" | "top" | "rising" | "controversial") => subreddit::community(req, config).boxed(),
 		// Short link for post
-		Some(id) if id.len() > 4 && id.len() < 7 => post::item(req).boxed(),
+		Some(id) if id.len() > 4 && id.len() < 7 => post::item(req, config).boxed(),
 		// Error message for unknown pages
-		_ => error(req, "Nothing here".to_string()).boxed(),
+		_ => error(req, "Nothing here".to_string(), config).boxed(),
 	});
 
 	// Default service in case no routes match
-	app.at("/*").get(|req| error(req, "Nothing here".to_string()).boxed());
+	app.at("/*").get(|req, config| error(req, "Nothing here".to_string(), config).boxed());
 
 	println!("Running Ferrit v{} on {}!", env!("CARGO_PKG_VERSION"), listener);
 

@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use crate::config::Config;
 // CRATES
 use crate::utils::{
 	catch_random, error, filter_posts, format_num, format_url, get_filters, nsfw_landing, param, redirect, rewrite_urls, setting, template, val, Post, Preferences, Subreddit,
@@ -49,11 +52,11 @@ struct WallTemplate {
 }
 
 // SERVICES
-pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
+pub async fn community(req: Request<Body>, config: Arc<Config>) -> Result<Response<Body>, String> {
 	// Build Reddit API path
 	let root = req.uri().path() == "/";
-	let subscribed = setting(&req, "subscriptions");
-	let front_page = setting(&req, "front_page");
+	let subscribed = setting(&req, "subscriptions", config.clone());
+	let front_page = setting(&req, "front_page", config.clone());
 	let post_sort = req.cookie("post_sort").map_or_else(|| "hot".to_string(), |c| c.value().to_string());
 	let sort = req.param("sort").unwrap_or_else(|| req.param("id").unwrap_or(post_sort));
 
@@ -66,7 +69,7 @@ pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
 	} else {
 		front_page.clone()
 	});
-	let quarantined = can_access_quarantine(&req, &sub_name) || root;
+	let quarantined = can_access_quarantine(&req, &sub_name, config.clone()) || root;
 
 	// Handle random subreddits
 	if let Ok(random) = catch_random(&sub_name, "").await {
@@ -98,14 +101,14 @@ pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
 
 	// Return landing page if this post if this is NSFW community but the user
 	// has disabled the display of NSFW content or if the instance is SFW-only.
-	if sub.nsfw && (setting(&req, "show_nsfw") != "on" || crate::utils::sfw_only()) {
-		return Ok(nsfw_landing(req).await.unwrap_or_default());
+	if sub.nsfw && (setting(&req, "show_nsfw", config.clone()) != "on" || crate::utils::sfw_only()) {
+		return Ok(nsfw_landing(req, config.clone()).await.unwrap_or_default());
 	}
 
 	let path = format!("/r/{}/{}.json?{}&raw_json=1", sub_name.clone(), sort, req.uri().query().unwrap_or_default());
 	let url = String::from(req.uri().path_and_query().map_or("", |val| val.as_str()));
 	let redirect_url = url[1..].replace('?', "%3F").replace('&', "%26").replace('+', "%2B");
-	let filters = get_filters(&req);
+	let filters = get_filters(&req, config.clone());
 
 	// If all requested subs are filtered, we don't need to fetch posts.
 	if sub_name.split('+').all(|s| filters.contains(s)) {
@@ -114,7 +117,7 @@ pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
 			posts: Vec::new(),
 			sort: (sort, param(&path, "t").unwrap_or_default()),
 			ends: (param(&path, "after").unwrap_or_default(), "".to_string()),
-			prefs: Preferences::new(req),
+			prefs: Preferences::new(req, config.clone()),
 			url,
 			redirect_url,
 			is_filtered: true,
@@ -125,13 +128,13 @@ pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
 		match Post::fetch(&path, quarantined).await {
 			Ok((mut posts, after)) => {
 				let (_, all_posts_filtered) = filter_posts(&mut posts, &filters);
-				let all_posts_hidden_nsfw = posts.iter().all(|p| p.flags.nsfw) && setting(&req, "show_nsfw") != "on";
+				let all_posts_hidden_nsfw = posts.iter().all(|p| p.flags.nsfw) && setting(&req, "show_nsfw", config.clone()) != "on";
 				template(SubredditTemplate {
 					sub,
 					posts,
 					sort: (sort, param(&path, "t").unwrap_or_default()),
 					ends: (param(&path, "after").unwrap_or_default(), after),
-					prefs: Preferences::new(req),
+					prefs: Preferences::new(req, config.clone()),
 					url,
 					redirect_url,
 					is_filtered: false,
@@ -140,22 +143,22 @@ pub async fn community(req: Request<Body>) -> Result<Response<Body>, String> {
 				})
 			}
 			Err(msg) => match msg.as_str() {
-				"quarantined" => quarantine(req, sub_name),
-				"private" => error(req, format!("r/{} is a private community", sub_name)).await,
-				"banned" => error(req, format!("r/{} has been banned from Reddit", sub_name)).await,
-				_ => error(req, msg).await,
+				"quarantined" => quarantine(req, sub_name, config.clone()),
+				"private" => error(req, format!("r/{} is a private community", sub_name), config.clone()).await,
+				"banned" => error(req, format!("r/{} has been banned from Reddit", sub_name), config.clone()).await,
+				_ => error(req, msg, config.clone()).await,
 			},
 		}
 	}
 }
 
-pub fn quarantine(req: Request<Body>, sub: String) -> Result<Response<Body>, String> {
+pub fn quarantine(req: Request<Body>, sub: String, config: Arc<Config>) -> Result<Response<Body>, String> {
 	let wall = WallTemplate {
 		title: format!("r/{} is quarantined", sub),
 		msg: "Please click the button below to continue to this subreddit.".to_string(),
 		url: req.uri().to_string(),
 		sub,
-		prefs: Preferences::new(req),
+		prefs: Preferences::new(req, config),
 	};
 
 	Ok(
@@ -181,13 +184,13 @@ pub async fn add_quarantine_exception(req: Request<Body>) -> Result<Response<Bod
 	Ok(response)
 }
 
-pub fn can_access_quarantine(req: &Request<Body>, sub: &str) -> bool {
+pub fn can_access_quarantine(req: &Request<Body>, sub: &str, config: Arc<Config>) -> bool {
 	// Determine if the subreddit can be accessed
-	setting(req, &format!("allow_quaran_{}", sub.to_lowercase())).parse().unwrap_or_default()
+	setting(req, &format!("allow_quaran_{}", sub.to_lowercase()), config).parse().unwrap_or_default()
 }
 
 // Sub, filter, unfilter, or unsub by setting subscription cookie using response "Set-Cookie" header
-pub async fn subscriptions_filters(req: Request<Body>) -> Result<Response<Body>, String> {
+pub async fn subscriptions_filters(req: Request<Body>, config: Arc<Config>) -> Result<Response<Body>, String> {
 	let sub = req.param("sub").unwrap_or_default();
 	let action: Vec<String> = req.uri().path().split('/').map(String::from).collect();
 
@@ -202,7 +205,7 @@ pub async fn subscriptions_filters(req: Request<Body>) -> Result<Response<Body>,
 
 	let query = req.uri().query().unwrap_or_default().to_string();
 
-	let preferences = Preferences::new(req);
+	let preferences = Preferences::new(req, config);
 	let mut sub_list = preferences.subscriptions;
 	let mut filters = preferences.filters;
 
@@ -294,9 +297,9 @@ pub async fn subscriptions_filters(req: Request<Body>) -> Result<Response<Body>,
 	Ok(response)
 }
 
-pub async fn wiki(req: Request<Body>) -> Result<Response<Body>, String> {
+pub async fn wiki(req: Request<Body>, config: Arc<Config>) -> Result<Response<Body>, String> {
 	let sub = req.param("sub").unwrap_or_else(|| "reddit.com".to_string());
-	let quarantined = can_access_quarantine(&req, &sub);
+	let quarantined = can_access_quarantine(&req, &sub, config.clone());
 	// Handle random subreddits
 	if let Ok(random) = catch_random(&sub, "/wiki").await {
 		return Ok(random);
@@ -311,22 +314,22 @@ pub async fn wiki(req: Request<Body>) -> Result<Response<Body>, String> {
 			sub,
 			wiki: rewrite_urls(response["data"]["content_html"].as_str().unwrap_or("<h3>Wiki not found</h3>")),
 			page,
-			prefs: Preferences::new(req),
+			prefs: Preferences::new(req, config.clone()),
 			url,
 		}),
 		Err(msg) => {
 			if msg == "quarantined" {
-				quarantine(req, sub)
+				quarantine(req, sub, config.clone())
 			} else {
-				error(req, msg).await
+				error(req, msg, config.clone()).await
 			}
 		}
 	}
 }
 
-pub async fn sidebar(req: Request<Body>) -> Result<Response<Body>, String> {
+pub async fn sidebar(req: Request<Body>, config: Arc<Config>) -> Result<Response<Body>, String> {
 	let sub = req.param("sub").unwrap_or_else(|| "reddit.com".to_string());
-	let quarantined = can_access_quarantine(&req, &sub);
+	let quarantined = can_access_quarantine(&req, &sub, config.clone());
 
 	// Handle random subreddits
 	if let Ok(random) = catch_random(&sub, "/about/sidebar").await {
@@ -349,14 +352,14 @@ pub async fn sidebar(req: Request<Body>) -> Result<Response<Body>, String> {
 			// ),
 			sub,
 			page: "Sidebar".to_string(),
-			prefs: Preferences::new(req),
+			prefs: Preferences::new(req, config.clone()),
 			url,
 		}),
 		Err(msg) => {
 			if msg == "quarantined" {
-				quarantine(req, sub)
+				quarantine(req, sub, config.clone())
 			} else {
-				error(req, msg).await
+				error(req, msg, config.clone()).await
 			}
 		}
 	}

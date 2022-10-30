@@ -19,10 +19,11 @@ use std::{
 	result::Result,
 	str::{from_utf8, Split},
 	string::ToString,
+	sync::Arc,
 };
 use time::Duration;
 
-use crate::dbg_msg;
+use crate::{config::Config, dbg_msg};
 
 type BoxResponse = Pin<Box<dyn Future<Output = Result<Response<Body>, String>> + Send>>;
 
@@ -75,13 +76,14 @@ impl ToString for CompressionType {
 }
 
 pub struct Route<'a> {
-	router: &'a mut Router<fn(Request<Body>) -> BoxResponse>,
+	router: &'a mut Router<fn(Request<Body>, Arc<Config>) -> BoxResponse>,
 	path: String,
 }
 
 pub struct Server {
 	pub default_headers: HeaderMap,
-	router: Router<fn(Request<Body>) -> BoxResponse>,
+	router: Router<fn(Request<Body>, Arc<Config>) -> BoxResponse>,
+	config: Arc<Config>,
 }
 
 #[macro_export]
@@ -175,27 +177,27 @@ impl ResponseExt for Response<Body> {
 }
 
 impl Route<'_> {
-	fn method(&mut self, method: Method, dest: fn(Request<Body>) -> BoxResponse) -> &mut Self {
+	fn method(&mut self, method: Method, dest: fn(Request<Body>, Arc<Config>) -> BoxResponse) -> &mut Self {
 		self.router.add(&format!("/{}{}", method.as_str(), self.path), dest);
 		self
 	}
 
 	/// Add an endpoint for `GET` requests
-	pub fn get(&mut self, dest: fn(Request<Body>) -> BoxResponse) -> &mut Self {
+	pub fn get(&mut self, dest: fn(Request<Body>, Arc<Config>) -> BoxResponse) -> &mut Self {
 		self.method(Method::GET, dest)
 	}
 
 	/// Add an endpoint for `POST` requests
-	pub fn post(&mut self, dest: fn(Request<Body>) -> BoxResponse) -> &mut Self {
+	pub fn post(&mut self, dest: fn(Request<Body>, Arc<Config>) -> BoxResponse) -> &mut Self {
 		self.method(Method::POST, dest)
 	}
 }
-
 impl Server {
 	pub fn new() -> Self {
 		Self {
 			default_headers: HeaderMap::new(),
 			router: Router::new(),
+			config: Arc::new(Config::new()),
 		}
 	}
 
@@ -211,12 +213,14 @@ impl Server {
 			// For correct borrowing, these values need to be borrowed
 			let router = self.router.clone();
 			let default_headers = self.default_headers.clone();
+			let config = self.config.clone();
 
 			// This is the `Service` that will handle the connection.
 			// `service_fn` is a helper to convert a function that
 			// returns a Response into a `Service`.
 			// let shared_router = router.clone();
 			async move {
+				let config = config.clone();
 				Ok::<_, String>(service_fn(move |req: Request<Body>| {
 					let req_headers = req.headers().clone();
 					let def_headers = default_headers.clone();
@@ -237,7 +241,7 @@ impl Server {
 							parammed.set_params(found.params().clone());
 
 							// Run the route's function
-							let func = (found.handler().to_owned().to_owned())(parammed);
+							let func = (found.handler().to_owned().to_owned())(parammed, config.clone());
 							async move {
 								match func.await {
 									Ok(mut res) => {

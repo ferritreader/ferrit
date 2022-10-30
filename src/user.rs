@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 // CRATES
 use crate::client::json;
+use crate::config::Config;
 use crate::server::RequestExt;
 use crate::utils::{error, filter_posts, format_url, get_filters, nsfw_landing, param, setting, template, Post, Preferences, User};
 use askama::Template;
@@ -29,7 +32,7 @@ struct UserTemplate {
 }
 
 // FUNCTIONS
-pub async fn profile(req: Request<Body>) -> Result<Response<Body>, String> {
+pub async fn profile(req: Request<Body>, config: Arc<Config>) -> Result<Response<Body>, String> {
 	let listing = req.param("listing").unwrap_or_else(|| "overview".to_string());
 
 	// Build the Reddit JSON API path
@@ -52,11 +55,11 @@ pub async fn profile(req: Request<Body>) -> Result<Response<Body>, String> {
 	// Return landing page if this post if this Reddit deems this user NSFW,
 	// but we have also disabled the display of NSFW content or if the instance
 	// is SFW-only.
-	if user.nsfw && (setting(&req, "show_nsfw") != "on" || crate::utils::sfw_only()) {
-		return Ok(nsfw_landing(req).await.unwrap_or_default());
+	if user.nsfw && (setting(&req, "show_nsfw", config.clone()) != "on" || crate::utils::sfw_only()) {
+		return Ok(nsfw_landing(req, config.clone()).await.unwrap_or_default());
 	}
 
-	let filters = get_filters(&req);
+	let filters = get_filters(&req, config.clone());
 	if filters.contains(&["u_", &username].concat()) {
 		template(UserTemplate {
 			user,
@@ -64,7 +67,7 @@ pub async fn profile(req: Request<Body>) -> Result<Response<Body>, String> {
 			sort: (sort, param(&path, "t").unwrap_or_default()),
 			ends: (param(&path, "after").unwrap_or_default(), "".to_string()),
 			listing,
-			prefs: Preferences::new(req),
+			prefs: Preferences::new(req, config.clone()),
 			url,
 			redirect_url,
 			is_filtered: true,
@@ -76,14 +79,14 @@ pub async fn profile(req: Request<Body>) -> Result<Response<Body>, String> {
 		match Post::fetch(&path, false).await {
 			Ok((mut posts, after)) => {
 				let (_, all_posts_filtered) = filter_posts(&mut posts, &filters);
-				let all_posts_hidden_nsfw = posts.iter().all(|p| p.flags.nsfw) && setting(&req, "show_nsfw") != "on";
+				let all_posts_hidden_nsfw = posts.iter().all(|p| p.flags.nsfw) && setting(&req, "show_nsfw", config.clone()) != "on";
 				template(UserTemplate {
 					user,
 					posts,
 					sort: (sort, param(&path, "t").unwrap_or_default()),
 					ends: (param(&path, "after").unwrap_or_default(), after),
 					listing,
-					prefs: Preferences::new(req),
+					prefs: Preferences::new(req, config.clone()),
 					url,
 					redirect_url,
 					is_filtered: false,
@@ -92,7 +95,7 @@ pub async fn profile(req: Request<Body>) -> Result<Response<Body>, String> {
 				})
 			}
 			// If there is an error show error page
-			Err(msg) => error(req, msg).await,
+			Err(msg) => error(req, msg, config.clone()).await,
 		}
 	}
 }
