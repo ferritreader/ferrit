@@ -3,7 +3,7 @@ use std::env::var;
 use once_cell::sync::Lazy;
 
 // Waiting for https://github.com/rust-lang/rust/issues/74465 to land, so we can reduce reliance on once_cell
-static CONFIG: Lazy<Config> = Lazy::new(||Config::load());
+static CONFIG: Lazy<Config> = Lazy::new(|| Config::load());
 
 #[derive(Default, serde::Deserialize)]
 pub struct Config {
