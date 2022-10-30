@@ -356,6 +356,7 @@ dependencies = [
  "hyper-rustls",
  "libflate",
  "lipsum",
+ "once_cell",
  "percent-encoding",
  "regex",
  "route-recognizer",
@@ -364,6 +365,7 @@ dependencies = [
  "serde_json",
  "time",
  "tokio",
+ "toml",
  "url",
 ]
 
@@ -768,9 +770,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e82dad04139b71a90c080c8463fe0dc7902db5192d939bd0950f074d014339e1"
+checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
 
 [[package]]
 name = "openssl-probe"
@@ -1282,6 +1284,15 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "toml"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d82e1a7758622a465f8cee077614c73484dac5b836c02ff6a40d5d1010324d7"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
