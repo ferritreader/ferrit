@@ -27,7 +27,7 @@ pub async fn canonical_path(path: String) -> Result<Option<String>, String> {
 		None => Ok(None),
 		Some(hdr) => match hdr.to_str() {
 			Ok(val) => Ok(Some(val.to_string().trim_start_matches(REDDIT_URL_BASE).to_string())),
-			Err(e) => return Err(e.to_string()),
+			Err(e) => Err(e.to_string()),
 		},
 	}
 }
