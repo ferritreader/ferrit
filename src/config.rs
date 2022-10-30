@@ -59,18 +59,5 @@ fn get_setting_from_config(name: &str, config: &Config) -> Option<String> {
 	}
 }
 pub(crate) fn get_setting(name: &str) -> Option<String> {
-	match name {
-		"FERRIT_SFW_ONLY" => CONFIG.sfw_only.clone(),
-		"FERRIT_DEFAULT_THEME" => CONFIG.default_theme.clone(),
-		"FERRIT_DEFAULT_FRONT_PAGE" => CONFIG.default_front_page.clone(),
-		"FERRIT_DEFAULT_LAYOUT" => CONFIG.default_layout.clone(),
-		"FERRIT_DEFAULT_COMMENT_SORT" => CONFIG.default_comment_sort.clone(),
-		"FERRIT_DEFAULT_POST_SORT" => CONFIG.default_post_sort.clone(),
-		"FERRIT_DEFAULT_SHOW_NSFW" => CONFIG.default_show_nsfw.clone(),
-		"FERRIT_DEFAULT_BLUR_NSFW" => CONFIG.default_blur_nsfw.clone(),
-		"FERRIT_DEFAULT_USE_HLS" => CONFIG.default_use_hls.clone(),
-		"FERRIT_DEFAULT_HIDE_HLS_NOTIFICATION" => CONFIG.default_hide_hls_notification.clone(),
-		"FERRIT_DEFAULT_WIDE" => CONFIG.default_wide.clone(),
-		_ => None,
-	}
+	get_setting_from_config(name, &CONFIG)
 }
