@@ -22,8 +22,8 @@ pub struct Config {
 
 impl Config {
 	pub fn load() -> Self {
-		// Read from ferris.toml config file. If for any reason, it fails, the default `Config` is used (all None values)
-		let config: Config = toml::from_str(&std::fs::read_to_string("ferris.toml").unwrap_or_default()).unwrap_or_default();
+		// Read from ferrit.toml config file. If for any reason, it fails, the default `Config` is used (all None values)
+		let config: Config = toml::from_str(&std::fs::read_to_string("ferrit.toml").unwrap_or_default()).unwrap_or_default();
 		// This function defines the order of preference - first check for environment variables, then check the config, then if both are `None`,
 		// return a `None` via the `map_or_else` function
 		let parse = |key: &str| -> Option<String> { var(key).ok().map_or_else(|| get_setting_from_config(key, &config), Some) };
