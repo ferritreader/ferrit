@@ -24,9 +24,15 @@ impl Config {
 	pub fn load() -> Self {
 		// Read from ferrit.toml config file. If for any reason, it fails, the default `Config` is used (all None values)
 		let config: Config = toml::from_str(&std::fs::read_to_string("ferrit.toml").unwrap_or_default()).unwrap_or_default();
-		// This function defines the order of preference - first check for environment variables, then check the config, then if both are `None`,
+		// This function defines the order of preference - first check for environment variables with "FERRIT", then check
+		// for environment variables with "LIBREDDIT" for reverse compatibility, then check the config, then if both are `None`,
 		// return a `None` via the `map_or_else` function
-		let parse = |key: &str| -> Option<String> { var(key).ok().map_or_else(|| get_setting_from_config(key, &config), Some) };
+		let parse = |key: &str| -> Option<String> {
+			var(key)
+				.ok()
+				.map_or_else(|| var(key.replace("FERRIT", "LIBREDDIT")).ok(), Some)
+				.map_or_else(|| get_setting_from_config(key, &config), Some)
+		};
 		Self {
 			sfw_only: parse("FERRIT_SFW_ONLY"),
 			default_theme: parse("FERRIT_DEFAULT_THEME"),
@@ -58,6 +64,8 @@ fn get_setting_from_config(name: &str, config: &Config) -> Option<String> {
 		_ => None,
 	}
 }
+
+/// Retrieve setting from environment variable or config file
 pub(crate) fn get_setting(name: &str) -> Option<String> {
 	get_setting_from_config(name, &CONFIG)
 }
