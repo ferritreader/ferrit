@@ -2,7 +2,10 @@ use once_cell::sync::Lazy;
 use std::env::var;
 
 // Waiting for https://github.com/rust-lang/rust/issues/74465 to land, so we
-// can reduce reliance on once_cell
+// can reduce reliance on once_cell.
+//
+// This is the local static that is initialized at runtime (technically at
+// first request) and contains the instance settings.
 static CONFIG: Lazy<Config> = Lazy::new(Config::load);
 
 /// Stores the configuration parsed from the environment variables and the
