@@ -12,16 +12,37 @@ static CONFIG: Lazy<Config> = Lazy::new(Config::load);
 /// config file. `Config::Default()` contains None for each setting.
 #[derive(Default, serde::Deserialize)]
 pub struct Config {
+	#[serde(rename = "FERRIT_SFW_ONLY")]
 	sfw_only: Option<String>,
+
+	#[serde(rename = "FERRIT_DEFAULT_THEME")]
 	default_theme: Option<String>,
+
+	#[serde(rename = "FERRIT_DEFAULT_FRONT_PAGE")]
 	default_front_page: Option<String>,
+
+	#[serde(rename = "FERRIT_DEFAULT_LAYOUT")]
 	default_layout: Option<String>,
+
+	#[serde(rename = "FERRIT_DEFAULT_WIDE")]
 	default_wide: Option<String>,
+
+	#[serde(rename = "FERRIT_DEFAULT_COMMENT_SORT")]
 	default_comment_sort: Option<String>,
+
+	#[serde(rename = "FERRIT_DEFAULT_POST_SORT")]
 	default_post_sort: Option<String>,
+
+	#[serde(rename = "FERRIT_DEFAULT_SHOW_NSFW")]
 	default_show_nsfw: Option<String>,
+
+	#[serde(rename = "FERRIT_DEFAULT_BLUR_NSFW")]
 	default_blur_nsfw: Option<String>,
+
+	#[serde(rename = "FERRIT_DEFAULT_USE_HLS")]
 	default_use_hls: Option<String>,
+
+	#[serde(rename = "FERRIT_DEFAULT_HIDE_HLS_NOTIFICATION")]
 	default_hide_hls_notification: Option<String>,
 }
 
@@ -79,4 +100,43 @@ fn get_setting_from_config(name: &str, config: &Config) -> Option<String> {
 /// Retrieves setting from environment variable or config file.
 pub(crate) fn get_setting(name: &str) -> Option<String> {
 	get_setting_from_config(name, &CONFIG)
+}
+
+#[cfg(test)]
+use sealed_test::prelude::*;
+
+#[test]
+#[sealed_test(env = [("FERRIT_SFW_ONLY", "1")])]
+fn test_env_var() {
+	assert!(crate::utils::sfw_only())
+}
+
+#[test]
+#[sealed_test(env = [("FERRIT_DEFAULT_COMMENT_SORT", "top"), ("LIBREDDIT_DEFAULT_COMMENT_SORT", "best")])]
+fn test_env_precedence() {
+	assert_eq!(crate::config::get_setting("FERRIT_DEFAULT_COMMENT_SORT"), Some("top".into()))
+}
+
+#[test]
+#[sealed_test]
+fn test_config() {
+	let config_to_write = r#"FERRIT_DEFAULT_COMMENT_SORT = "best""#;
+	std::fs::write("ferrit.toml", config_to_write).unwrap();
+	assert_eq!(crate::config::get_setting("FERRIT_DEFAULT_COMMENT_SORT"), Some("best".into()));
+}
+
+#[test]
+#[sealed_test(env = [("FERRIT_DEFAULT_COMMENT_SORT", "top")])]
+fn test_env_config_precedence() {
+	let config_to_write = r#"FERRIT_DEFAULT_COMMENT_SORT = "best""#;
+	std::fs::write("ferrit.toml", config_to_write).unwrap();
+	assert_eq!(crate::config::get_setting("FERRIT_DEFAULT_COMMENT_SORT"), Some("top".into()))
+}
+
+#[test]
+#[sealed_test(env = [("LIBREDDIT_DEFAULT_COMMENT_SORT", "top")])]
+fn test_alt_env_config_precedence() {
+	let config_to_write = r#"FERRIT_DEFAULT_COMMENT_SORT = "best""#;
+	std::fs::write("Ferrit.toml", config_to_write).unwrap();
+	assert_eq!(crate::config::get_setting("FERRIT_DEFAULT_COMMENT_SORT"), Some("top".into()))
 }
