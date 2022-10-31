@@ -1,10 +1,12 @@
+use once_cell::sync::Lazy;
 use std::env::var;
 
-use once_cell::sync::Lazy;
+// Waiting for https://github.com/rust-lang/rust/issues/74465 to land, so we
+// can reduce reliance on once_cell
+static CONFIG: Lazy<Config> = Lazy::new(Config::load);
 
-// Waiting for https://github.com/rust-lang/rust/issues/74465 to land, so we can reduce reliance on once_cell
-static CONFIG: Lazy<Config> = Lazy::new(|| Config::load());
-
+/// Stores the configuration parsed from the environment variables and the
+/// config file. `Config::Default()` contains None for each setting.
 #[derive(Default, serde::Deserialize)]
 pub struct Config {
 	sfw_only: Option<String>,
@@ -21,12 +23,17 @@ pub struct Config {
 }
 
 impl Config {
+	/// Load the configuration from the environment variables and the config file.
+	/// In the case that there are no environment variables set and there is no
+	/// config file, this function returns a Config that contains all None values.
 	pub fn load() -> Self {
-		// Read from ferrit.toml config file. If for any reason, it fails, the default `Config` is used (all None values)
+		// Read from ferrit.toml config file. If for any reason, it fails, the
+		// default `Config` is used (all None values)
 		let config: Config = toml::from_str(&std::fs::read_to_string("ferrit.toml").unwrap_or_default()).unwrap_or_default();
-		// This function defines the order of preference - first check for environment variables with "FERRIT", then check
-		// for environment variables with "LIBREDDIT" for reverse compatibility, then check the config, then if both are `None`,
-		// return a `None` via the `map_or_else` function
+		// This function defines the order of preference - first check for
+		// environment variables with "FERRIT", then check for environment variables
+		// with "LIBREDDIT" for reverse compatibility, then check the config, then if
+		// both are `None`, return a `None` via the `map_or_else` function
 		let parse = |key: &str| -> Option<String> {
 			var(key)
 				.ok()
@@ -48,6 +55,7 @@ impl Config {
 		}
 	}
 }
+
 fn get_setting_from_config(name: &str, config: &Config) -> Option<String> {
 	match name {
 		"FERRIT_SFW_ONLY" => config.sfw_only.clone(),
@@ -65,7 +73,7 @@ fn get_setting_from_config(name: &str, config: &Config) -> Option<String> {
 	}
 }
 
-/// Retrieve setting from environment variable or config file
+/// Retrieves setting from environment variable or config file.
 pub(crate) fn get_setting(name: &str) -> Option<String> {
 	get_setting_from_config(name, &CONFIG)
 }
