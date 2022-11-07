@@ -1,31 +1,3 @@
-# Ferrit
+# FERRIT IS DISCONTINUED
 
-**Ferrit** is a front-end for Reddit, written in [Rust](https://www.rust-lang.org/). It is a fork of the [Libreddit project](https://github.com/spikecodes/libreddit) started by [spikecodes](https://spike.codes).
-
-## Why Ferrit?
-
-Ferrit is a fast, light, private, and secure way to browse Reddit. View the hottest takes on **/r/unpopularopinion** without having to enable Javascript or unwillingly submit any information to Reddit's servers. For more information, see the following pages on our [wiki](https://github.com/ferritreader/ferrit/wiki):
-
-* [FAQ/What are the advantages to using Ferrit over Reddit?](https://github.com/ferritreader/ferrit/wiki/FAQ#what-are-the-advantages-to-using-ferrit-over-reddit): what Ferrit does and why it is preferable to visiting Reddit directly
-* [FAQ/What are the disadvantages to using Ferrit over Reddit?](https://github.com/ferritreader/ferrit/wiki/FAQ#what-are-the-disadvantages-to-using-ferrit-over-reddit): what Ferrit is _not_
-* [Privacy/Reddit](https://github.com/ferritreader/ferrit/wiki/Privacy#reddit): an acounting of the data Reddit may and will collect from its visitors
-
-The [whole FAQ](https://github.com/ferritreader/ferrit/wiki/FAQ) may address other questions you may have about Ferrit.
-
-## Instances
-
-Visit the [_Instances_ wiki page](https://github.com/ferritreader/ferrit/wiki/Instances) for a list of running Ferrit instances.
-
-## Getting and Installing Ferrit
-
-Visit [Building, Installation, and Deployment](https://github.com/ferritreader/ferrit/wiki/Building,-Installation,-and-Deployment) on the wiki for detailed instructions on how to obtain and set up Ferrit.
-
-## Discuss
-
-You can talk with the Ferrit maintainers and other uses in the official forums. See the [_Discuss_ wiki page](https://github.com/ferritreader/ferrit/wiki/Discuss) for more information.
-
-## Credits
-
-See the CREDITS file in the repository root for a list of contributors up to and including the commit of the latest release. This file is updated with each release and on occasion in between releases.
-
-We offer special thanks to **spikecodes** for his foundational work on the Libreddit project.
+The Ferrit project has been terminated with the resumption of development on [Libreddit](https://github.com/libreddit/libreddit).
